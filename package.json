@@ -2,21 +2,19 @@
   "name": "frases-domo",
   "version": "1.0.0",
   "description": "Backend de Frases Domo",
-  "main": "server.js",
+  "main": "api/server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node api/server.js",
+    "dev": "nodemon api/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",
     "socket.io": "^4.8.1"
   },

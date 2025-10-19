@@ -81,107 +81,116 @@
   </div>
 </div>
 
-<script type="module">
-const API_URL = import.meta.env.VITE_API_URL;
-let token = localStorage.getItem("token");
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+  const socket = io();
 
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById(tab.dataset.tab).classList.add('active');
-  });
-});
+  // ⚠️ Cambia aquí según tu entorno
+  const API_URL = "https://domo.vercel.app/api"; // producción
+  // const API_URL = "http://localhost:3000/api"; // local
 
-// Login
-const loginForm = document.getElementById("loginForm");
-loginForm.addEventListener("submit", async e => {
-  e.preventDefault();
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
+  let token = localStorage.getItem("token");
 
-  try {
-    const res = await fetch(`${API_URL}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab).classList.add('active');
     });
-    const data = await res.json();
-    if (res.ok) {
-      token = data.token;
-      localStorage.setItem("token", token);
-      document.getElementById("loginSection").style.display = "none";
-      document.getElementById("mainSection").style.display = "block";
-      cargarFrases();
-    } else {
-      alert(data.error || "Error de login");
-    }
-  } catch (err) { console.error(err); }
-});
+  });
 
-// Logout
-document.getElementById("logoutBtn").addEventListener("click", () => {
-  localStorage.removeItem("token");
-  token = null;
-  document.getElementById("mainSection").style.display = "none";
-  document.getElementById("loginSection").style.display = "block";
-});
+  // Login
+  const loginForm = document.getElementById("loginForm");
+  loginForm.addEventListener("submit", async e => {
+    e.preventDefault();
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
 
-// Cargar frases
-async function cargarFrases() {
-  if (!token) return;
-  try {
+    try {
+      const res = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        token = data.token;
+        localStorage.setItem("token", token);
+        document.getElementById("loginSection").style.display = "none";
+        document.getElementById("mainSection").style.display = "block";
+        cargarFrases();
+      } else {
+        alert(data.error || "Error de login");
+      }
+    } catch (err) { console.error(err); }
+  });
+
+  // Logout
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    localStorage.removeItem("token");
+    token = null;
+    document.getElementById("mainSection").style.display = "none";
+    document.getElementById("loginSection").style.display = "block";
+  });
+
+  // Cargar frases
+  async function cargarFrases() {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/frases`, { headers: { Authorization: "Bearer " + token } });
+      const data = await res.json();
+      if (!Array.isArray(data)) { console.error("Respuesta inválida:", data); return; }
+      mostrarFrases(data);
+    } catch (err) { console.error(err); }
+  }
+
+  function mostrarFrases(frases) {
+    const recibidas = document.getElementById("tablaRecibidas");
+    const aprobadas = document.getElementById("tablaAprobadas");
+    recibidas.innerHTML = "";
+    aprobadas.innerHTML = "";
+
+    frases.forEach(f => {
+      if (!f.aprobada) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${f.texto}</td>
+                        <td><button onclick="aprobar(${f.id})">Aprobar</button></td>
+                        <td><button onclick="eliminarAprobada(${f.id})">Rechazar</button></td>`;
+        recibidas.appendChild(tr);
+      } else {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${f.texto}</td>
+                        <td><input type="checkbox" ${f.fijada ? "checked" : ""} onchange="fijar(${f.id}, this.checked)"></td>
+                        <td><button onclick="eliminarAprobada(${f.id})">Eliminar</button></td>`;
+        aprobadas.appendChild(tr);
+      }
+    });
+  }
+
+  // Acciones
+  async function aprobar(id) { await fetch(`${API_URL}/frases/${id}/aprobar`, { method: "PUT", headers: { Authorization: "Bearer " + token } }); cargarFrases(); }
+  async function eliminarAprobada(id) { if (!confirm("¿Seguro que deseas eliminar esta frase?")) return; await fetch(`${API_URL}/frases/${id}`, { method: "DELETE", headers: { Authorization: "Bearer " + token } }); cargarFrases(); }
+  async function fijar(id, checked) { await fetch(`${API_URL}/frases/${id}/fijar`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ fijada: checked }) }); }
+
+  // Socket para tiempo real
+  socket.on("fraseActualizada", cargarFrases);
+
+  // Exportar CSV
+  document.getElementById("exportCsvBtn").addEventListener("click", async () => {
+    if (!token) return;
     const res = await fetch(`${API_URL}/frases`, { headers: { Authorization: "Bearer " + token } });
     const data = await res.json();
-    if (!Array.isArray(data)) { console.error("Respuesta inválida:", data); return; }
-    mostrarFrases(data);
-  } catch (err) { console.error(err); }
-}
-
-function mostrarFrases(frases) {
-  const recibidas = document.getElementById("tablaRecibidas");
-  const aprobadas = document.getElementById("tablaAprobadas");
-  recibidas.innerHTML = "";
-  aprobadas.innerHTML = "";
-
-  frases.forEach(f => {
-    if (!f.aprobada) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${f.texto}</td>
-                      <td><button onclick="aprobar(${f.id})">Aprobar</button></td>
-                      <td><button onclick="eliminarAprobada(${f.id})">Rechazar</button></td>`;
-      recibidas.appendChild(tr);
-    } else {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${f.texto}</td>
-                      <td><input type="checkbox" ${f.fijada ? "checked" : ""} onchange="fijar(${f.id}, this.checked)"></td>
-                      <td><button onclick="eliminarAprobada(${f.id})">Eliminar</button></td>`;
-      aprobadas.appendChild(tr);
-    }
+    const csv = ["id,texto,fijada,fecha", ...data.filter(f => f.aprobada).map(f => `${f.id},"${f.texto}",${f.fijada},${f.fecha}`)].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "frases_aprobadas.csv";
+    link.click();
   });
-}
 
-// Acciones
-async function aprobar(id) { await fetch(`${API_URL}/frases/${id}/aprobar`, { method: "PUT", headers: { Authorization: "Bearer " + token } }); cargarFrases(); }
-async function eliminarAprobada(id) { if (!confirm("¿Seguro que deseas eliminar esta frase?")) return; await fetch(`${API_URL}/frases/${id}`, { method: "DELETE", headers: { Authorization: "Bearer " + token } }); cargarFrases(); }
-async function fijar(id, checked) { await fetch(`${API_URL}/frases/${id}/fijar`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ fijada: checked }) }); }
-
-// Exportar CSV
-document.getElementById("exportCsvBtn").addEventListener("click", async () => {
-  if (!token) return;
-  const res = await fetch(`${API_URL}/frases`, { headers: { Authorization: "Bearer " + token } });
-  const data = await res.json();
-  const csv = ["id,texto,fijada,fecha", ...data.filter(f => f.aprobada).map(f => `${f.id},"${f.texto}",${f.fijada},${f.fecha}`)].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "frases_aprobadas.csv";
-  link.click();
-});
-
-// Mantener sesión
-if (token) { document.getElementById("loginSection").style.display = "none"; document.getElementById("mainSection").style.display = "block"; cargarFrases(); }
+  // Mantener sesión
+  if (token) { document.getElementById("loginSection").style.display = "none"; document.getElementById("mainSection").style.display = "block"; cargarFrases(); }
 </script>
 </body>
 </html>
